@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -11,12 +11,12 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  
+
   # For LocalStack testing
   skip_credentials_validation = var.use_localstack
-  skip_metadata_api_check    = var.use_localstack
-  skip_requesting_account_id = var.use_localstack
-  
+  skip_metadata_api_check     = var.use_localstack
+  skip_requesting_account_id  = var.use_localstack
+
   endpoints {
     s3 = var.use_localstack ? "http://localhost:4566" : null
   }
@@ -25,7 +25,7 @@ provider "aws" {
 # S3 Bucket with security best practices
 resource "aws_s3_bucket" "demo" {
   bucket = var.bucket_name
-  
+
   tags = merge(
     var.tags,
     {
@@ -39,7 +39,7 @@ resource "aws_s3_bucket" "demo" {
 # Enable versioning
 resource "aws_s3_bucket_versioning" "demo" {
   bucket = aws_s3_bucket.demo.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -48,7 +48,7 @@ resource "aws_s3_bucket_versioning" "demo" {
 # Enable server-side encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "demo" {
   bucket = aws_s3_bucket.demo.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -59,7 +59,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "demo" {
 # Block public access
 resource "aws_s3_bucket_public_access_block" "demo" {
   bucket = aws_s3_bucket.demo.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -69,11 +69,11 @@ resource "aws_s3_bucket_public_access_block" "demo" {
 # Lifecycle rule
 resource "aws_s3_bucket_lifecycle_configuration" "demo" {
   bucket = aws_s3_bucket.demo.id
-  
+
   rule {
     id     = "cleanup-old-versions"
     status = "Enabled"
-    
+
     noncurrent_version_expiration {
       noncurrent_days = 90
     }

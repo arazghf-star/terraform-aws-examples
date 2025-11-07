@@ -25,7 +25,7 @@ variable "use_localstack" {
 variable "tags" {
   description = "Additional tags for resources"
   type        = map(string)
-  default     = {
+  default = {
     Project = "DevOps-Portfolio"
     Owner   = "DevOps-Engineer"
   }
