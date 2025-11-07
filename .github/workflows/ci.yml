@@ -1,0 +1,110 @@
+name: Terraform CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: [simple-s3]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+      
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: examples/${{ matrix.example }}
+      
+      - name: Terraform Init
+        run: terraform init
+        working-directory: examples/${{ matrix.example }}
+      
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: examples/${{ matrix.example }}
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: examples
+          format: sarif
+          soft_fail: true
+      
+      - name: Upload tfsec results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results.sarif
+      
+      - name: Run Trivy for IaC scanning
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'examples'
+          format: 'sarif'
+          output: 'trivy-iac-results.sarif'
+      
+      - name: Upload Trivy IaC results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-iac-results.sarif'
+
+  plan:
+    name: Terraform Plan (LocalStack)
+    runs-on: ubuntu-latest
+    needs: validate
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3
+          DEBUG: 1
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+      
+      - name: Wait for LocalStack
+        run: |
+          timeout 30 bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "\"s3\": \"available\""; do sleep 1; done'
+      
+      - name: Terraform Init
+        run: terraform init
+        working-directory: examples/simple-s3
+      
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        working-directory: examples/simple-s3
+        env:
+          TF_VAR_use_localstack: true
+          TF_VAR_bucket_name: test-bucket-${{ github.run_id }}
+      
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-plan
+          path: examples/simple-s3/tfplan
+          retention-days: 7
